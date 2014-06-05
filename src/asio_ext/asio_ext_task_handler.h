@@ -11,9 +11,6 @@
 namespace AsioExt
 {
 
-class TaskHandler;
-typedef boost::shared_ptr<TaskHandler> TaskHandlerP;
-
 ///////////////////////////////////////////////////////////////////////////////
 
 class TaskHandler 
@@ -22,9 +19,6 @@ class TaskHandler
 	, public boost::intrusive::list_base_hook<boost::intrusive::link_mode<boost::intrusive::auto_unlink>>
 {
 	TaskHandlerP selfShared_; // to prevent destruction while in intrusive list
-
-	typedef boost::function<void ()> VoidFunc;
-	typedef boost::function<void (TaskHandlerP)> TaskFunc;
 
 	basio::io_service& service_;
 	TaskHandlerP parentTaskHandler_;
@@ -51,6 +45,9 @@ public:
 	~TaskHandler();
 
 	TaskHandlerP startChild(const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
+		const VoidFunc& exitHandler = VoidFunc());
+
+	TaskHandlerP makeChild(const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
 		const VoidFunc& exitHandler = VoidFunc());
 
 	bool aborted() const;

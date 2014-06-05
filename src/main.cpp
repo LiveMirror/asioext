@@ -2,6 +2,7 @@
 
 #include "asio_ext\asio_ext_service.h"
 #include "asio_ext\asio_ext_task_handler.h"
+#include "asio_ext\asio_ext_task_shared_mutex.h"
 
 using namespace AsioExt;
 
@@ -195,11 +196,53 @@ void exampleWithLogging()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// shared mutex example
+
+void readTask(TaskHandlerP taskHandler, int i)
+{
+	{
+		boost::mutex::scoped_lock lock(printMutex);
+		std::cout << "Read " << i << std::endl;
+	}
+
+	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 900));
+}
+
+void writeTask(TaskHandlerP taskHandler, int i)
+{
+	{
+		boost::mutex::scoped_lock lock(printMutex);
+		std::cout << "Write " << i << std::endl;
+	}
+
+	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 900));
+}
+
+void exampleWithSharedMutex()
+{
+	TaskSharedMutex mutex;
+
+	{
+		Service service;
+
+		for (int i = 0; i < 10; ++i)
+			mutex.startShared(*service, boost::bind(readTask, _1, i));
+	
+		for (int i = 0; i < 10; ++i)
+			mutex.start(*service, boost::bind(writeTask, _1, i));
+
+		for (int i = 0; i < 10; ++i)
+			mutex.startShared(*service, boost::bind(readTask, _1, i));
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 int main(void)
 {
-	simpleExample();
+	//simpleExample();
 	//exampleWithLogging();	
+	exampleWithSharedMutex();
 
 	return 0;
 }
