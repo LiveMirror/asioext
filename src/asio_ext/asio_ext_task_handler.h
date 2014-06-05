@@ -47,9 +47,6 @@ public:
 	TaskHandlerP startChild(const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
 		const VoidFunc& exitHandler = VoidFunc());
 
-	TaskHandlerP makeChild(const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
-		const VoidFunc& exitHandler = VoidFunc());
-
 	bool aborted() const;
 	void abort();
 
