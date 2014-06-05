@@ -205,7 +205,7 @@ void readTask(TaskHandlerP taskHandler, int i)
 		std::cout << "Read " << i << std::endl;
 	}
 
-	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 900));
+	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 500));
 }
 
 void writeTask(TaskHandlerP taskHandler, int i)
@@ -215,25 +215,25 @@ void writeTask(TaskHandlerP taskHandler, int i)
 		std::cout << "Write " << i << std::endl;
 	}
 
-	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 900));
+	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 500));
 }
 
 void exampleWithSharedMutex()
 {
+	Service service;
 	TaskSharedMutex mutex;
 
-	{
-		Service service;
-
-		for (int i = 0; i < 10; ++i)
-			mutex.startShared(*service, boost::bind(readTask, _1, i));
+	for (int i = 0; i < 10; ++i)
+		mutex.startShared(*service, boost::bind(readTask, _1, i));
 	
-		for (int i = 0; i < 10; ++i)
-			mutex.start(*service, boost::bind(writeTask, _1, i));
+	for (int i = 0; i < 10; ++i)
+		mutex.start(*service, boost::bind(writeTask, _1, i));
 
-		for (int i = 0; i < 10; ++i)
-			mutex.startShared(*service, boost::bind(readTask, _1, i));
-	}
+	for (int i = 0; i < 10; ++i)
+		mutex.startShared(*service, boost::bind(readTask, _1, i));
+
+	for (int i = 0; i < 2; ++i)
+		mutex.start(*service, boost::bind(writeTask, _1, i));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

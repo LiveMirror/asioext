@@ -15,6 +15,12 @@ TaskSharedMutex::TaskSharedMutex()
 
 TaskSharedMutex::~TaskSharedMutex()
 {
+	boost::unique_lock<boost::mutex> lock(accessMutex_);
+
+	while (!waitingTasks_.empty() || numReaders_ > 0 || hasWriter_)
+	{
+		taskFinishedCond_.wait(lock);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -60,6 +66,11 @@ void TaskSharedMutex::startInternal(bool shared, TaskHandlerP parentTaskHandler,
 
 		if (exitHandler)
 			exitHandler();
+
+		{
+			boost::mutex::scoped_lock lock(accessMutex_);
+			taskFinishedCond_.notify_one();
+		}
 	};
 
 	boost::mutex::scoped_lock lock(accessMutex_);
@@ -77,26 +88,20 @@ void TaskSharedMutex::startInternal(bool shared, TaskHandlerP parentTaskHandler,
 	}
 	else
 	{
-		auto wrappedTask = [this, shared, task](TaskHandlerP taskHandler)
-		{
-			taskStarted(shared);
-			task(taskHandler);
-		};
-		
 		if (service)
 		{
-			auto startTask = [service, wrappedTask, successHandler, wrappedExitHandler]()
+			auto startTask = [service, task, successHandler, wrappedExitHandler]()
 			{
-				TaskHandler::start(*service, wrappedTask, successHandler, wrappedExitHandler);
+				TaskHandler::start(*service, task, successHandler, wrappedExitHandler);
 			};
 
 			waitingTasks_.push_back(WaitingTask(shared, startTask));
 		}
 		else
 		{
-			auto startTask = [parentTaskHandler, wrappedTask, successHandler, wrappedExitHandler]()
+			auto startTask = [parentTaskHandler, task, successHandler, wrappedExitHandler]()
 			{
-				parentTaskHandler->startChild(wrappedTask, successHandler, wrappedExitHandler);
+				parentTaskHandler->startChild(task, successHandler, wrappedExitHandler);
 			};
 
 			waitingTasks_.push_back(WaitingTask(shared, startTask));

@@ -4,6 +4,7 @@
 
 #include <boost/thread/mutex.hpp>
 #include <boost/noncopyable.hpp>
+#include <boost/thread/condition_variable.hpp>
 
 namespace AsioExt
 {
@@ -28,6 +29,7 @@ class TaskSharedMutex : boost::noncopyable
 	bool hasWriter_;
 
 	std::list<WaitingTask> waitingTasks_;
+	boost::condition_variable taskFinishedCond_;
 
 public:
 	TaskSharedMutex();
