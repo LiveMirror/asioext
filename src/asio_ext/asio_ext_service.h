@@ -15,6 +15,9 @@ class Service : boost::noncopyable
 	boost::thread_group threads_;
 	boost::shared_ptr<basio::io_service::work> dummyWork_;
 
+	boost::mutex currentTasksMutex_;
+	std::map<boost::thread::id, TaskHandler*> currentTasks_;
+
 public:
 	Service(const uint numThreads = boost::thread::hardware_concurrency());
 	~Service();
@@ -23,6 +26,9 @@ public:
 	const basio::io_service* operator -> () const { return &service_; }
 	basio::io_service& operator* () { return service_; }
 	const basio::io_service& operator* () const { return service_; }
+
+	void setCurrentTask(TaskHandler& handler);
+	TaskHandler* getCurrentTask();
 
 private:
 

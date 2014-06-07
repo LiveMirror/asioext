@@ -11,7 +11,14 @@ Service::Service(const uint numThreads)
 
 	for (uint threadIndex = numThreads; threadIndex--; )
 	{
-		threads_.add_thread(new boost::thread(boost::bind(&Service::threadFunc, this)));
+		boost::thread* thread = new boost::thread(boost::bind(&Service::threadFunc, this));
+
+		{
+			boost::mutex::scoped_lock lock(currentTasksMutex_);
+			currentTasks_.insert(std::make_pair(thread->get_id(), (TaskHandler*)NULL));
+		}
+
+		threads_.add_thread(thread);
 	}
 }
 
@@ -21,6 +28,33 @@ Service::~Service()
 {
 	dummyWork_.reset();
 	threads_.join_all();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void Service::setCurrentTask(TaskHandler& handler)
+{
+	boost::mutex::scoped_lock lock(currentTasksMutex_);
+	auto it = currentTasks_.find(boost::this_thread::get_id());
+
+	assert(it != currentTasks_.end());
+	it->second = &handler;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+TaskHandler* Service::getCurrentTask()
+{
+	boost::mutex::scoped_lock lock(currentTasksMutex_);
+	auto it = currentTasks_.find(boost::this_thread::get_id());
+
+	if (it != currentTasks_.end())
+	{
+		assert(it->second);
+		return it->second;
+	}
+	else
+		return NULL;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

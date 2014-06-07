@@ -1,5 +1,6 @@
 #include "asio_ext_task_shared_mutex.h"
 #include "asio_ext_task_handler.h"
+#include "asio_ext_service.h"
 
 namespace AsioExt
 {
@@ -21,51 +22,108 @@ TaskSharedMutex::~TaskSharedMutex()
 	{
 		taskFinishedCond_.wait(lock);
 	}
+
+	assert(tasks_.empty());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void TaskSharedMutex::start(TaskHandlerP parentTaskHandler, const TaskFunc& task, const VoidFunc& successHandler, 
-	const VoidFunc& exitHandler)
+void TaskSharedMutex::start(TaskHandlerP parentTaskHandler, const TaskFunc& task, const SuccessFunc& successHandler, 
+	const ExitFunc& exitHandler)
 {
 	startInternal(false, parentTaskHandler, NULL, task, successHandler, exitHandler);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void TaskSharedMutex::start(basio::io_service& service, const TaskFunc& task, const VoidFunc& successHandler, 
-	const VoidFunc& exitHandler)
+void TaskSharedMutex::start(Service& service, const TaskFunc& task, const SuccessFunc& successHandler, 
+	const ExitFunc& exitHandler)
 {
 	startInternal(false, TaskHandlerP(), &service, task, successHandler, exitHandler);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void TaskSharedMutex::startShared(TaskHandlerP parentTaskHandler, const TaskFunc& task, const VoidFunc& successHandler, 
-	const VoidFunc& exitHandler)
+void TaskSharedMutex::startShared(TaskHandlerP parentTaskHandler, const TaskFunc& task, const SuccessFunc& successHandler, 
+	const ExitFunc& exitHandler)
 {
 	startInternal(true, parentTaskHandler, NULL, task, successHandler, exitHandler);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void TaskSharedMutex::startShared(basio::io_service& service, const TaskFunc& task, const VoidFunc& successHandler, 
-	const VoidFunc& exitHandler)
+void TaskSharedMutex::startShared(Service& service, const TaskFunc& task, const SuccessFunc& successHandler, 
+	const ExitFunc& exitHandler)
 {
 	startInternal(true, TaskHandlerP(), &service, task, successHandler, exitHandler);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void TaskSharedMutex::startInternal(bool shared, TaskHandlerP parentTaskHandler, basio::io_service* service, const TaskFunc& task, const VoidFunc& successHandler, 
-	const VoidFunc& exitHandler)
+void TaskSharedMutex::assertLocked()
 {
-	auto wrappedExitHandler = [this, shared, exitHandler]()
-	{
-		taskFinished(shared);
+	boost::mutex::scoped_lock lock(tasksMutex_);
 
+	TaskHandler* currentTaskHandler = NULL;
+
+	for (auto taskHandler = tasks_.begin(); taskHandler != tasks_.end(); ++taskHandler)
+	{
+		if (currentTaskHandler = (*taskHandler)->getService().getCurrentTask())
+			break;
+	}
+
+	assert(currentTaskHandler != NULL);
+
+	bool foundParent = false;
+
+	for (auto taskHandler = tasks_.begin(); taskHandler != tasks_.end(); ++taskHandler)
+	{
+		if (currentTaskHandler == *taskHandler || currentTaskHandler->isChildOf(**taskHandler))
+		{
+			foundParent = true;
+			break;
+		}
+	}
+
+	assert(foundParent);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void TaskSharedMutex::startInternal(bool shared, TaskHandlerP parentTaskHandler, Service* serviceP, const TaskFunc& task, 
+	const SuccessFunc& successHandler, const ExitFunc& exitHandler)
+{
+	Service& service = serviceP ? *serviceP : parentTaskHandler->getService();
+
+	auto wrappedTask = [this, task](TaskHandlerP taskHandler)
+	{
+		{
+			boost::mutex::scoped_lock lock(tasksMutex_);
+			tasks_.push_back(taskHandler.get());
+		}
+
+		task(taskHandler);
+	};
+
+	auto wrappedExitHandler = [this, &service, shared, exitHandler](TaskHandler* taskHandler)
+	{
 		if (exitHandler)
-			exitHandler();
+			exitHandler(taskHandler);
+
+		{
+			{
+				boost::mutex::scoped_lock lock(tasksMutex_);
+
+				auto it = std::find(tasks_.begin(), tasks_.end(), taskHandler);
+				assert(it != tasks_.end());
+				tasks_.erase(it);
+			}
+
+			{
+				boost::mutex::scoped_lock lock(accessMutex_);
+				taskFinishedInternal(shared);
+			}
+		}
 
 		{
 			boost::mutex::scoped_lock lock(accessMutex_);
@@ -81,27 +139,27 @@ void TaskSharedMutex::startInternal(bool shared, TaskHandlerP parentTaskHandler,
 	{
 		taskStartedInternal(shared);
 
-		if (service)
-			TaskHandler::start(*service, task, successHandler, wrappedExitHandler);
+		if (serviceP)
+			TaskHandler::start(*serviceP, wrappedTask, successHandler, wrappedExitHandler);
 		else
 			parentTaskHandler->startChild(task, successHandler, wrappedExitHandler);
 	}
 	else
 	{
-		if (service)
+		if (serviceP)
 		{
-			auto startTask = [service, task, successHandler, wrappedExitHandler]()
+			auto startTask = [serviceP, wrappedTask, successHandler, wrappedExitHandler]()
 			{
-				TaskHandler::start(*service, task, successHandler, wrappedExitHandler);
+				TaskHandler::start(*serviceP, wrappedTask, successHandler, wrappedExitHandler);
 			};
 
 			waitingTasks_.push_back(WaitingTask(shared, startTask));
 		}
 		else
 		{
-			auto startTask = [parentTaskHandler, task, successHandler, wrappedExitHandler]()
+			auto startTask = [parentTaskHandler, wrappedTask, successHandler, wrappedExitHandler]()
 			{
-				parentTaskHandler->startChild(task, successHandler, wrappedExitHandler);
+				parentTaskHandler->startChild(wrappedTask, successHandler, wrappedExitHandler);
 			};
 
 			waitingTasks_.push_back(WaitingTask(shared, startTask));
@@ -121,19 +179,8 @@ void TaskSharedMutex::taskStartedInternal(bool shared)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void TaskSharedMutex::taskStarted(bool shared)
+void TaskSharedMutex::taskFinishedInternal(bool shared)
 {
-	boost::mutex::scoped_lock lock(accessMutex_);
-	taskStartedInternal(shared);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-void TaskSharedMutex::taskFinished(bool shared)
-{
-	// todo: make lock_guard with more precise range
-	boost::mutex::scoped_lock lock(accessMutex_);
-
 	if (shared)
 		--numReaders_;
 	else

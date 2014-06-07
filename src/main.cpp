@@ -39,7 +39,7 @@ void simpleExample()
 	LARGE_INTEGER startTime;
 	QueryPerformanceCounter(&startTime);
 
-	TaskHandler::start(*service,
+	TaskHandler::start(service,
 		[](AsioExt::TaskHandlerP task)
 		{
 			int a = 2;
@@ -52,7 +52,7 @@ void simpleExample()
 					[] () { 
 						// successfully finished
 					},
-					[] () {
+					[] (TaskHandler*) {
 						// all task tree finished
 					});
 			}
@@ -113,7 +113,7 @@ void sampleChildTask(TaskHandlerP handler, std::string caption)
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree SUCCESS <---" << std::endl;
 			},
-			[childCaption] () {
+			[childCaption] (TaskHandler*) {
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree finished" << std::endl;
 			});
@@ -152,7 +152,7 @@ void sampleTask(TaskHandlerP handler, std::string caption)
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree SUCCESS <---" << std::endl;
 			},
-			[childCaption] () {
+			[childCaption] (TaskHandler*) {
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree finished" << std::endl;
 			});
@@ -172,13 +172,13 @@ void exampleWithLogging()
 
 		std::string caption = "task0";
 
-		TaskHandlerP taskHandler = TaskHandler::start(*service,
+		TaskHandlerP taskHandler = TaskHandler::start(service,
 			boost::bind(sampleTask, _1, caption),
 			[caption] () {
 				boost::mutex::scoped_lock lock(printMutex);
 				std::cout << caption << " tree SUCCESS <---" << std::endl;
 			},
-			[caption] () {
+			[caption] (TaskHandler*) {
 				boost::mutex::scoped_lock lock(printMutex);
 				std::cout << caption << " tree finished" << std::endl;
 			});
@@ -198,22 +198,33 @@ void exampleWithLogging()
 ///////////////////////////////////////////////////////////////////////////////
 // shared mutex example
 
-void readTask(TaskHandlerP taskHandler, int i)
+void childCheckMutex(TaskHandlerP taskHandler, TaskSharedMutex& mutex)
+{
+	mutex.assertLocked();
+}
+
+void readTask(TaskHandlerP taskHandler, int i, TaskSharedMutex& mutex)
 {
 	{
 		boost::mutex::scoped_lock lock(printMutex);
 		std::cout << "Read " << i << std::endl;
 	}
 
+	mutex.assertLocked();
+	taskHandler->startChild(boost::bind(childCheckMutex, _1, boost::ref(mutex)));
+
 	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 500));
 }
 
-void writeTask(TaskHandlerP taskHandler, int i)
+void writeTask(TaskHandlerP taskHandler, int i, TaskSharedMutex& mutex)
 {
 	{
 		boost::mutex::scoped_lock lock(printMutex);
 		std::cout << "Write " << i << std::endl;
 	}
+
+	mutex.assertLocked();
+	taskHandler->startChild(boost::bind(childCheckMutex, _1, boost::ref(mutex)));
 
 	boost::this_thread::sleep(boost::posix_time::milliseconds((rand() % 100) + 500));
 }
@@ -224,16 +235,16 @@ void exampleWithSharedMutex()
 	TaskSharedMutex mutex;
 
 	for (int i = 0; i < 10; ++i)
-		mutex.startShared(*service, boost::bind(readTask, _1, i));
+		mutex.startShared(service, boost::bind(readTask, _1, i, boost::ref(mutex)));
 	
 	for (int i = 0; i < 10; ++i)
-		mutex.start(*service, boost::bind(writeTask, _1, i));
+		mutex.start(service, boost::bind(writeTask, _1, i, boost::ref(mutex)));
 
 	for (int i = 0; i < 10; ++i)
-		mutex.startShared(*service, boost::bind(readTask, _1, i));
+		mutex.startShared(service, boost::bind(readTask, _1, i, boost::ref(mutex)));
 
 	for (int i = 0; i < 2; ++i)
-		mutex.start(*service, boost::bind(writeTask, _1, i));
+		mutex.start(service, boost::bind(writeTask, _1, i, boost::ref(mutex)));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -241,7 +252,7 @@ void exampleWithSharedMutex()
 int main(void)
 {
 	//simpleExample();
-	//exampleWithLogging();	
+	exampleWithLogging();	
 	exampleWithSharedMutex();
 
 	return 0;

@@ -10,6 +10,7 @@
 
 namespace AsioExt
 {
+class Service;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -20,11 +21,11 @@ class TaskHandler
 {
 	TaskHandlerP selfShared_; // to prevent destruction while in intrusive list
 
-	basio::io_service& service_;
+	Service& service_;
 	TaskHandlerP parentTaskHandler_;
 	TaskFunc task_;
-	VoidFunc successHandler_;
-	VoidFunc exitHandler_;
+	SuccessFunc successHandler_;
+	ExitFunc exitHandler_;
 	bool (TaskHandler::*abortedFunc_)() const; // does need to be mutexed?
 
 	boost::mutex childrenActivityMutex_;
@@ -32,23 +33,27 @@ class TaskHandler
 	boost::intrusive::list<TaskHandler, boost::intrusive::constant_time_size<false>> waitingTasks_;
 	
 private:
-	TaskHandler(basio::io_service& service, TaskHandlerP parentTaskHandler, 
-		const TaskFunc& task, const VoidFunc& successHandler, const VoidFunc& exitHandler);
+	TaskHandler(Service& service, TaskHandlerP parentTaskHandler, 
+		const TaskFunc& task, const SuccessFunc& successHandler, const ExitFunc& exitHandler);
 
-	TaskHandler(basio::io_service& service, const TaskFunc& task, const VoidFunc& successHandler, 
-		const VoidFunc& exitHandler);
+	TaskHandler(Service& service, const TaskFunc& task, const SuccessFunc& successHandler, 
+		const ExitFunc& exitHandler);
 
 public:
-	static TaskHandlerP start(basio::io_service& service, const TaskFunc& task,
-		const VoidFunc& successHandler = VoidFunc(), const VoidFunc& exitHandler = VoidFunc());
+	static TaskHandlerP start(Service& service, const TaskFunc& task,
+		const SuccessFunc& successHandler = SuccessFunc(), const ExitFunc& exitHandler = ExitFunc());
 
 	~TaskHandler();
 
-	TaskHandlerP startChild(const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
-		const VoidFunc& exitHandler = VoidFunc());
+	TaskHandlerP startChild(const TaskFunc& task, const SuccessFunc& successHandler = SuccessFunc(), 
+		const ExitFunc& exitHandler = ExitFunc());
+
+	Service& getService();
 
 	bool aborted() const;
 	void abort();
+
+	bool isChildOf(TaskHandler& handler) const;
 
 private:
 	bool _notAborted() const;

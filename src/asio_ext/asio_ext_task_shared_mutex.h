@@ -8,6 +8,7 @@
 
 namespace AsioExt
 {
+class Service;
 ///////////////////////////////////////////////////////////////////////////////
 
 class TaskSharedMutex : boost::noncopyable
@@ -24,9 +25,12 @@ class TaskSharedMutex : boost::noncopyable
 	};
 
 	boost::mutex accessMutex_;
-
 	uint numReaders_;
 	bool hasWriter_;
+
+
+	boost::mutex tasksMutex_;
+	std::vector<TaskHandler*> tasks_;
 
 	std::list<WaitingTask> waitingTasks_;
 	boost::condition_variable taskFinishedCond_;
@@ -35,22 +39,22 @@ public:
 	TaskSharedMutex();
 	~TaskSharedMutex();
 
-	void start(TaskHandlerP parentTaskHandler, const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
-		const VoidFunc& exitHandler = VoidFunc());
-	void start(basio::io_service& service, const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
-		const VoidFunc& exitHandler = VoidFunc());
-	void startShared(TaskHandlerP parentTaskHandler, const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
-		const VoidFunc& exitHandler = VoidFunc());
-	void startShared(basio::io_service& service, const TaskFunc& task, const VoidFunc& successHandler = VoidFunc(), 
-		const VoidFunc& exitHandler = VoidFunc());
+	void start(TaskHandlerP parentTaskHandler, const TaskFunc& task, const SuccessFunc& successHandler = SuccessFunc(), 
+		const ExitFunc& exitHandler = ExitFunc());
+	void start(Service& service, const TaskFunc& task, const SuccessFunc& successHandler = SuccessFunc(), 
+		const ExitFunc& exitHandler = ExitFunc());
+	void startShared(TaskHandlerP parentTaskHandler, const TaskFunc& task, const SuccessFunc& successHandler = SuccessFunc(), 
+		const ExitFunc& exitHandler = ExitFunc());
+	void startShared(Service& service, const TaskFunc& task, const SuccessFunc& successHandler = SuccessFunc(), 
+		const ExitFunc& exitHandler = ExitFunc());
+
+	void assertLocked();
 
 private:
-	void startInternal(bool shared, TaskHandlerP parentTaskHandler, basio::io_service* service, const TaskFunc& task, const VoidFunc& successHandler, 
-		const VoidFunc& exitHandler);
+	void startInternal(bool shared, TaskHandlerP parentTaskHandler, Service* service, const TaskFunc& task, const SuccessFunc& successHandler, 
+		const ExitFunc& exitHandler);
 	void taskStartedInternal(bool shared);
-
-	void taskStarted(bool shared);
-	void taskFinished(bool shared);
+	void taskFinishedInternal(bool shared);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
