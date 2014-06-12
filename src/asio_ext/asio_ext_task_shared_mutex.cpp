@@ -142,7 +142,7 @@ void TaskSharedMutex::startInternal(bool shared, TaskHandlerP parentTaskHandler,
 		if (serviceP)
 			TaskHandler::start(*serviceP, wrappedTask, successHandler, wrappedExitHandler);
 		else
-			parentTaskHandler->startChild(task, successHandler, wrappedExitHandler);
+			parentTaskHandler->startChild(wrappedTask, successHandler, wrappedExitHandler);
 	}
 	else
 	{

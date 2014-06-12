@@ -46,7 +46,7 @@ TaskHandlerP TaskHandler::start(Service& service, const TaskFunc& task,
 		task(taskHandler);
 	};
 
-	TaskHandlerP taskHandler(new TaskHandler(service, task, successHandler, exitHandler));
+	TaskHandlerP taskHandler = std::make_shared<TaskHandler>(service, task, successHandler, exitHandler);
 	service->post(boost::bind(wrappedTask, taskHandler));
 	return taskHandler;
 }
@@ -99,7 +99,7 @@ TaskHandlerP TaskHandler::startChild(const TaskFunc& task, const SuccessFunc& su
 		task(taskHandler);
 	};
 
-	TaskHandlerP taskHandler(new TaskHandler(service_, shared_from_this(), wrappedTask, successHandler, exitHandler));
+	TaskHandlerP taskHandler = std::make_shared<TaskHandler>(service_, shared_from_this(), wrappedTask, successHandler, exitHandler);
 
 	{
 		boost::mutex::scoped_lock lock(childrenActivityMutex_);

@@ -16,7 +16,7 @@ class Service;
 
 class TaskHandler 
 	: boost::noncopyable
-	, public boost::enable_shared_from_this<TaskHandler>
+	, public std::enable_shared_from_this<TaskHandler>
 	, public boost::intrusive::list_base_hook<boost::intrusive::link_mode<boost::intrusive::auto_unlink>>
 {
 	TaskHandlerP selfShared_; // to prevent destruction while in intrusive list
@@ -32,14 +32,13 @@ class TaskHandler
 	bool taskPosted_;
 	boost::intrusive::list<TaskHandler, boost::intrusive::constant_time_size<false>> waitingTasks_;
 	
-private:
+public:
 	TaskHandler(Service& service, TaskHandlerP parentTaskHandler, 
 		const TaskFunc& task, const SuccessFunc& successHandler, const ExitFunc& exitHandler);
 
 	TaskHandler(Service& service, const TaskFunc& task, const SuccessFunc& successHandler, 
 		const ExitFunc& exitHandler);
 
-public:
 	static TaskHandlerP start(Service& service, const TaskFunc& task,
 		const SuccessFunc& successHandler = SuccessFunc(), const ExitFunc& exitHandler = ExitFunc());
 

@@ -13,7 +13,7 @@ class Service : boost::noncopyable
 {
 	basio::io_service service_;
 	boost::thread_group threads_;
-	boost::shared_ptr<basio::io_service::work> dummyWork_;
+	std::shared_ptr<basio::io_service::work> dummyWork_;
 
 	boost::mutex currentTasksMutex_;
 	std::map<boost::thread::id, TaskHandler*> currentTasks_;
@@ -28,6 +28,7 @@ public:
 	const basio::io_service& operator* () const { return service_; }
 
 	void setCurrentTask(TaskHandler& handler);
+	void continueTask(TaskHandler* handler);
 	TaskHandler* getCurrentTask();
 
 private:

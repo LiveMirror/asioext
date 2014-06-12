@@ -185,7 +185,7 @@ void exampleWithLogging()
 
 		if (i > 0)
 		{
-			boost::shared_ptr<basio::deadline_timer> timer(new basio::deadline_timer(*service, boost::posix_time::milliseconds(100)));
+			boost::shared_ptr<basio::deadline_timer> timer = boost::make_shared<basio::deadline_timer>(*service, boost::posix_time::milliseconds(100));
 
 			timer->async_wait([taskHandler, timer] (const boost::system::error_code&)
 			{
