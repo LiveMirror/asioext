@@ -1,0 +1,34 @@
+#include "asio_ext_service.h"
+
+namespace AsioExt
+{
+///////////////////////////////////////////////////////////////////////////////
+
+Service::Service(const uint numThreads)
+: dummyWork_(new basio::io_service::work(service_))
+{
+	assert(numThreads > 0);
+
+	for (uint threadIndex = numThreads; threadIndex--; )
+	{
+		threads_.add_thread(new boost::thread(boost::bind(&Service::threadFunc, this)));
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+Service::~Service()
+{
+	dummyWork_.reset();
+	threads_.join_all();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void Service::threadFunc()
+{
+	service_.run();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+}
