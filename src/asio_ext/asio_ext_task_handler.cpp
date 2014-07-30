@@ -1,12 +1,16 @@
 #include "asio_ext_task_handler.h"
 
+#include <boost/bind.hpp>
+
 namespace AsioExt
 {
 ///////////////////////////////////////////////////////////////////////////////
 
-TaskHandler::TaskHandler(basio::io_service& service, TaskHandlerP parentTaskHandler, const Handler& successHandler, const Handler& exitHandler)
+TaskHandler::TaskHandler(basio::io_service& service, TaskHandlerP parentTaskHandler, 
+	const TaskFunc& task, const VoidFunc& successHandler, const VoidFunc& exitHandler)
 : service_(service)
 , parentTaskHandler_(parentTaskHandler)
+, task_(task)
 , successHandler_(successHandler)
 , exitHandler_(exitHandler)
 {
@@ -16,8 +20,10 @@ TaskHandler::TaskHandler(basio::io_service& service, TaskHandlerP parentTaskHand
 
 ///////////////////////////////////////////////////////////////////////////////
 
-TaskHandler::TaskHandler(basio::io_service& service, const Handler& successHandler, const Handler& exitHandler)
+TaskHandler::TaskHandler(basio::io_service& service, const TaskFunc& task, 
+	const VoidFunc& successHandler, const VoidFunc& exitHandler)
 : service_(service)
+, task_(task)
 , successHandler_(successHandler)
 , exitHandler_(exitHandler)
 , abortedFunc_(&TaskHandler::_notAborted)
@@ -26,10 +32,13 @@ TaskHandler::TaskHandler(basio::io_service& service, const Handler& successHandl
 
 ///////////////////////////////////////////////////////////////////////////////
 
-TaskHandlerP TaskHandler::create(basio::io_service& service, const Handler& successHandler, 
-	const Handler& exitHandler)
+TaskHandlerP TaskHandler::start(basio::io_service& service, const TaskFunc& task, 
+	const VoidFunc& successHandler, const VoidFunc& exitHandler)
 {
-	return TaskHandlerP(new TaskHandler(service, successHandler, exitHandler));
+	assert(task);
+	TaskHandlerP taskHandler(new TaskHandler(service, task, successHandler, exitHandler));
+	service.post(boost::bind(task, taskHandler));
+	return taskHandler;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,16 +54,13 @@ TaskHandler::~TaskHandler()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-TaskHandlerP TaskHandler::childHandler(const Handler& successHandler, const Handler& exitHandler)
+TaskHandlerP TaskHandler::startChild(const TaskFunc& task, const VoidFunc& successHandler, 
+	const VoidFunc& exitHandler)
 {
-	return TaskHandlerP(new TaskHandler(service_, shared_from_this(), successHandler, exitHandler));
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-void TaskHandler::post(Handler handler)
-{
-	service_.post(handler);
+	assert(task);
+	TaskHandlerP taskHandler(new TaskHandler(service_, shared_from_this(), task, successHandler, exitHandler));
+	service_.post(boost::bind(task, taskHandler));
+	return taskHandler;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

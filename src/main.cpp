@@ -17,7 +17,7 @@ void simpleChildTask(TaskHandlerP handler)
 {
 	for (uint i = 0; i < 3; ++i)
 	{
-		handler->post(boost::bind(simpleGrandChildTask, handler->childHandler()));
+		handler->startChild(boost::bind(simpleGrandChildTask, _1));
 	}
 
 	boost::this_thread::sleep(boost::posix_time::milliseconds(rand() % 5));
@@ -27,7 +27,7 @@ void simpleTask(TaskHandlerP handler)
 {
 	for (uint i = 0; i < 3; ++i)
 	{
-		handler->post(boost::bind(simpleChildTask, handler->childHandler()));
+		handler->startChild(boost::bind(simpleChildTask, _1));
 	}
 }
 
@@ -36,10 +36,10 @@ void simpleExample()
 	Service service;
 
 	{
-		service->post(boost::bind(simpleTask, TaskHandler::create(*service,
+		TaskHandler::start(*service, boost::bind(simpleTask, _1),
 			[] () { 
 				// handle task tree finished here
-		})));
+		});
 	}
 }
 
@@ -82,7 +82,8 @@ void sampleChildTask(TaskHandlerP handler, std::string caption)
 		s << "\t" << caption << " - " << i;
 		std::string childCaption = s.str();
 
-		handler->post(boost::bind(sampleGrandChildTask, handler->childHandler(
+		handler->startChild(
+			boost::bind(sampleGrandChildTask, _1, s.str()),
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree OK" << std::endl;
@@ -90,8 +91,7 @@ void sampleChildTask(TaskHandlerP handler, std::string caption)
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree finished" << std::endl;
-			}
-		), s.str()));
+			});
 	}
 
 	for (uint i = 0; i < 10; ++i)
@@ -121,7 +121,8 @@ void sampleTask(TaskHandlerP handler, std::string caption)
 		s << "\t" << caption << " - " << i;
 		std::string childCaption = s.str();
 
-		handler->post(boost::bind(sampleChildTask, handler->childHandler(
+		handler->startChild(
+			boost::bind(sampleChildTask, _1, s.str()),
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree OK" << std::endl;
@@ -129,8 +130,7 @@ void sampleTask(TaskHandlerP handler, std::string caption)
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
 					std::cout << childCaption << " tree finished" << std::endl;
-			}
-		), s.str()));
+			});
 	}
 
 	{
@@ -147,7 +147,8 @@ void exampleWithLogging()
 
 		std::string caption = "task0";
 
-		TaskHandlerP taskHandler = TaskHandler::create(*service,
+		TaskHandlerP taskHandler = TaskHandler::start(*service,
+			boost::bind(sampleTask, _1, caption),
 			[caption] () {
 				boost::mutex::scoped_lock lock(printMutex);
 				std::cout << caption << " tree OK" << std::endl;
@@ -156,8 +157,6 @@ void exampleWithLogging()
 				boost::mutex::scoped_lock lock(printMutex);
 				std::cout << caption << " tree finished" << std::endl;
 			});
-
-		service->post(boost::bind(sampleTask, taskHandler, caption));
 
 		if (i > 0)
 		{
