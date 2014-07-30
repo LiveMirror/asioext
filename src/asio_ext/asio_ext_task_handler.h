@@ -31,7 +31,7 @@ class TaskHandler
 	TaskFunc task_;
 	VoidFunc successHandler_;
 	VoidFunc exitHandler_;
-	bool (TaskHandler::*abortedFunc_)() const;
+	bool (TaskHandler::*abortedFunc_)() const; // does need to be mutexed?
 
 	boost::mutex childrenActivityMutex_;
 	bool taskPosted_;
