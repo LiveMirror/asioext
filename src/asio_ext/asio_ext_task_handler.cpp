@@ -13,6 +13,7 @@ TaskHandler::TaskHandler(basio::io_service& service, TaskHandlerP parentTaskHand
 , task_(task)
 , successHandler_(successHandler)
 , exitHandler_(exitHandler)
+, taskPosted_(false)
 {
 	if (parentTaskHandler)
 		abortedFunc_ = &TaskHandler::_abortedFromParent;
@@ -27,6 +28,7 @@ TaskHandler::TaskHandler(basio::io_service& service, const TaskFunc& task,
 , successHandler_(successHandler)
 , exitHandler_(exitHandler)
 , abortedFunc_(&TaskHandler::_notAborted)
+, taskPosted_(false)
 {
 }
 
@@ -45,6 +47,12 @@ TaskHandlerP TaskHandler::start(basio::io_service& service, const TaskFunc& task
 
 TaskHandler::~TaskHandler()
 {
+	if (parentTaskHandler_)
+	{
+		boost::mutex::scoped_lock lock(parentTaskHandler_->childrenActivityMutex_);
+		unlink();
+	}
+
 	if (successHandler_ && !aborted())
 		successHandler_();
 
@@ -58,8 +66,47 @@ TaskHandlerP TaskHandler::startChild(const TaskFunc& task, const VoidFunc& succe
 	const VoidFunc& exitHandler)
 {
 	assert(task);
-	TaskHandlerP taskHandler(new TaskHandler(service_, shared_from_this(), task, successHandler, exitHandler));
-	service_.post(boost::bind(task, taskHandler));
+
+	TaskFunc wrappedTask = [this, task] (TaskHandlerP taskHandler)
+	{
+		boost::mutex::scoped_lock lock(childrenActivityMutex_);
+
+		assert(taskPosted_);
+
+		if (!waitingTasks_.empty())
+		{
+			TaskHandlerP taskHandler;
+			waitingTasks_.front().selfShared_.swap(taskHandler);
+			assert(taskHandler);
+
+			waitingTasks_.erase(waitingTasks_.begin());
+			service_.post(boost::bind(taskHandler->task_, taskHandler));
+		}
+		else
+		{
+			taskPosted_ = false;
+		}
+
+		task(taskHandler);
+	};
+
+	TaskHandlerP taskHandler(new TaskHandler(service_, shared_from_this(), wrappedTask, successHandler, exitHandler));
+
+	{
+		boost::mutex::scoped_lock lock(childrenActivityMutex_);
+
+		if (taskPosted_)
+		{
+			taskHandler->selfShared_ = taskHandler;
+			waitingTasks_.push_back(*taskHandler);
+		}
+		else
+		{
+			service_.post(boost::bind(wrappedTask, taskHandler));
+			taskPosted_ = true;
+		}
+	}
+
 	return taskHandler;
 }
 

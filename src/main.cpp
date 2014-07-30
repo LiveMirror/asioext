@@ -36,10 +36,14 @@ void simpleExample()
 	Service service;
 
 	{
-		TaskHandler::start(*service, boost::bind(simpleTask, _1),
+		TaskHandler::start(*service, 
+			boost::bind(simpleTask, _1), // task
 			[] () { 
-				// handle task tree finished here
-		});
+				// successfully finished
+			},
+			[] () {
+				// all task tree finished
+			});
 	}
 }
 
@@ -86,7 +90,7 @@ void sampleChildTask(TaskHandlerP handler, std::string caption)
 			boost::bind(sampleGrandChildTask, _1, s.str()),
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
-					std::cout << childCaption << " tree OK" << std::endl;
+					std::cout << childCaption << " tree SUCCESS <---" << std::endl;
 			},
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
@@ -125,7 +129,7 @@ void sampleTask(TaskHandlerP handler, std::string caption)
 			boost::bind(sampleChildTask, _1, s.str()),
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
-					std::cout << childCaption << " tree OK" << std::endl;
+					std::cout << childCaption << " tree SUCCESS <---" << std::endl;
 			},
 			[childCaption] () {
 					boost::mutex::scoped_lock lock(printMutex);
@@ -141,9 +145,9 @@ void sampleTask(TaskHandlerP handler, std::string caption)
 
 void exampleWithLogging()
 {
-	for (uint i = 0; i < 2; ++i)
+	for (uint i = 1; i < 2; ++i)
 	{
-		Service service;
+		Service service(8);
 
 		std::string caption = "task0";
 
@@ -151,7 +155,7 @@ void exampleWithLogging()
 			boost::bind(sampleTask, _1, caption),
 			[caption] () {
 				boost::mutex::scoped_lock lock(printMutex);
-				std::cout << caption << " tree OK" << std::endl;
+				std::cout << caption << " tree SUCCESS <---" << std::endl;
 			},
 			[caption] () {
 				boost::mutex::scoped_lock lock(printMutex);
@@ -160,7 +164,7 @@ void exampleWithLogging()
 
 		if (i > 0)
 		{
-			boost::shared_ptr<basio::deadline_timer> timer(new basio::deadline_timer(*service, boost::posix_time::milliseconds(10)));
+			boost::shared_ptr<basio::deadline_timer> timer(new basio::deadline_timer(*service, boost::posix_time::milliseconds(100)));
 
 			timer->async_wait([taskHandler, timer] (const boost::system::error_code&)
 			{

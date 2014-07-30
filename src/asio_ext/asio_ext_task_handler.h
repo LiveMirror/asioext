@@ -4,6 +4,9 @@
 
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/intrusive/list.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/function.hpp>
 
 namespace AsioExt
 {
@@ -16,7 +19,10 @@ typedef boost::shared_ptr<TaskHandler> TaskHandlerP;
 class TaskHandler 
 	: boost::noncopyable
 	, public boost::enable_shared_from_this<TaskHandler>
+	, public boost::intrusive::list_base_hook<boost::intrusive::link_mode<boost::intrusive::auto_unlink>>
 {
+	TaskHandlerP selfShared_; // to prevent destruction while in intrusive list
+
 	typedef boost::function<void ()> VoidFunc;
 	typedef boost::function<void (TaskHandlerP)> TaskFunc;
 
@@ -26,6 +32,10 @@ class TaskHandler
 	VoidFunc successHandler_;
 	VoidFunc exitHandler_;
 	bool (TaskHandler::*abortedFunc_)() const;
+
+	boost::mutex childrenActivityMutex_;
+	bool taskPosted_;
+	boost::intrusive::list<TaskHandler, boost::intrusive::constant_time_size<false>> waitingTasks_;
 	
 private:
 	TaskHandler(basio::io_service& service, TaskHandlerP parentTaskHandler, 
