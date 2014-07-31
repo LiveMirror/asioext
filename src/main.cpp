@@ -8,26 +8,26 @@ using namespace AsioExt;
 ///////////////////////////////////////////////////////////////////////////////
 // simple example
 
-void simpleGrandChildTask(TaskHandlerP handler)
+void simpleGrandChildTask(TaskHandlerP handler, int a, int b)
 {
-	boost::this_thread::sleep(boost::posix_time::milliseconds(rand() % 10));
+	//boost::this_thread::sleep(boost::posix_time::milliseconds(rand() % 10));
 }
 
-void simpleChildTask(TaskHandlerP handler)
+void simpleChildTask(TaskHandlerP handler, int a, int b)
 {
-	for (uint i = 0; i < 3; ++i)
+	for (uint i = 0; i < 100; ++i)
 	{
-		handler->startChild(boost::bind(simpleGrandChildTask, _1));
+		handler->startChild(boost::bind(simpleGrandChildTask, _1, a + 1, b + 1));
 	}
 
-	boost::this_thread::sleep(boost::posix_time::milliseconds(rand() % 5));
+	//boost::this_thread::sleep(boost::posix_time::milliseconds(rand() % 5));
 }
 
-void simpleTask(TaskHandlerP handler)
+void simpleTask(TaskHandlerP handler, int a, int b)
 {
-	for (uint i = 0; i < 3; ++i)
+	for (uint i = 0; i < 100; ++i)
 	{
-		handler->startChild(boost::bind(simpleChildTask, _1));
+		handler->startChild(boost::bind(simpleChildTask, _1, a + 1, b + 1));
 	}
 }
 
@@ -35,16 +35,36 @@ void simpleExample()
 {
 	Service service;
 
-	{
-		TaskHandler::start(*service, 
-			boost::bind(simpleTask, _1), // task
-			[] () { 
-				// successfully finished
-			},
-			[] () {
-				// all task tree finished
-			});
-	}
+	LARGE_INTEGER startTime;
+	QueryPerformanceCounter(&startTime);
+
+	TaskHandler::start(*service,
+		[](AsioExt::TaskHandlerP task)
+		{
+			int a = 2;
+			int b = 3;
+
+			for (uint i = 0; i < 100; ++i)
+			{
+				task->startChild(
+					boost::bind(simpleTask, _1, a++, b++), // task
+					[] () { 
+						// successfully finished
+					},
+					[] () {
+						// all task tree finished
+					});
+			}
+		},
+		[startTime]()
+		{
+			LARGE_INTEGER endTime;
+			QueryPerformanceCounter(&endTime);
+
+			long elapsedTime = (long)(endTime.QuadPart - startTime.QuadPart);
+
+			std::cout << "Elapsed time: " << elapsedTime << std::endl;
+		});
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -179,7 +199,7 @@ void exampleWithLogging()
 int main(void)
 {
 	simpleExample();
-	exampleWithLogging();	
+	//exampleWithLogging();	
 
 	return 0;
 }
